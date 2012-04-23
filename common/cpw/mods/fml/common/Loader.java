@@ -197,9 +197,17 @@ public class Loader
         {
             if (mod.wantsPreInit())
             {
+            	//davboecki
+            	int MMWid = de.davboecki.multimodworld.api.ModAnalyseHelper.preMod();
+            	//davboecki end
+            	
                 log.finer(String.format("Pre-initializing %s", mod.getSource()));
                 mod.preInit();
                 namedMods.put(mod.getName(), mod);
+                
+                //davboecki
+                de.davboecki.multimodworld.api.ModAnalyseHelper.postMod(MMWid, mod);
+                //davboecki end
             }
         }
 
@@ -216,8 +224,16 @@ public class Loader
 
         for (ModContainer mod : mods)
         {
+            //davboecki
+        	int MMWid = de.davboecki.multimodworld.api.ModAnalyseHelper.preMod();
+            //davboecki end
+        	
             log.finer(String.format("Initializing %s", mod.getName()));
             mod.init();
+            
+            //davboecki
+            de.davboecki.multimodworld.api.ModAnalyseHelper.postMod(MMWid, mod);
+            //davboecki end
         }
 
         log.fine("Mod initialization complete");
@@ -232,8 +248,16 @@ public class Loader
         {
             if (mod.wantsPostInit())
             {
+                //davboecki
+            	int MMWid = de.davboecki.multimodworld.api.ModAnalyseHelper.preMod();
+                //davboecki end
+                
                 log.finer(String.format("Post-initializing %s", mod.getName()));
                 mod.postInit();
+
+                //davboecki
+                de.davboecki.multimodworld.api.ModAnalyseHelper.postMod(MMWid, mod);
+                //davboecki end
             }
         }
 
@@ -403,7 +427,6 @@ public class Loader
         boolean foundAModClass = false;
         File[] content = modDir.listFiles(new FileFilter()
         {
-            @Override
             public boolean accept(File file)
             {
                 return (file.isFile() && modClass.matcher(file.getName()).find()) || file.isDirectory();
@@ -437,24 +460,36 @@ public class Loader
     {
         try
         {
+            //davboecki
+            int MMWid = de.davboecki.multimodworld.api.ModAnalyseHelper.preMod();
+            ModContainer MMWmod = null;
+            //davboecki end
             Class<?> clazz = Class.forName(clazzName, false, modClassLoader);
 
             if (clazz.isAnnotationPresent(Mod.class))
             {
                 // an FML mod
-                mods.add(FMLModContainer.buildFor(clazz));
+                //mods.add(FMLModContainer.buildFor(clazz));
+                mods.add(MMWmod = FMLModContainer.buildFor(clazz)); //davboecki add MMWmod
             }
             else if (FMLCommonHandler.instance().isModLoaderMod(clazz))
             {
                 log.fine(String.format("ModLoader BaseMod class %s found, loading", clazzName));
                 ModContainer mc = FMLCommonHandler.instance().loadBaseModMod(clazz, classSource.getCanonicalPath());
                 mods.add(mc);
+                
+                MMWmod = mc; //davboecki add MMWmod
+                
                 log.fine(String.format("ModLoader BaseMod class %s loaded", clazzName));
             }
             else
             {
                 // Unrecognized
             }
+            //davboecki
+            if(MMWmod != null) de.davboecki.multimodworld.api.ModChecker.ModLoaded(MMWmod);
+            de.davboecki.multimodworld.api.ModAnalyseHelper.postMod(MMWid, MMWmod);
+            //davboecki end
         }
         catch (Exception e)
         {
