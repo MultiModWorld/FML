@@ -139,7 +139,12 @@ public class FMLBukkitHandler implements IFMLSidedHandler
      * @param generator
      */
     public void onChunkPopulate(IChunkProvider chunkProvider, int chunkX, int chunkZ, World world, IChunkProvider generator)
-    {
+    {	
+    	//davboecki
+    	if(!de.davboecki.multimodworld.api.ModChecker.populateChunk(world, getMinecraftLogger())) {
+    		return;
+    	}
+    	//davboecki end
         Random fmlRandom = new Random(world.getSeed());
         long xSeed = fmlRandom.nextLong() >> 2 + 1L;
         long zSeed = fmlRandom.nextLong() >> 2 + 1L;
