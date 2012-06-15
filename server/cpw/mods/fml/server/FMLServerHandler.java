@@ -14,32 +14,51 @@ package cpw.mods.fml.server;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.logging.Logger;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.src.BaseMod;
 import net.minecraft.src.BiomeGenBase;
-import net.minecraft.src.CommonRegistry;
+import net.minecraft.src.Block;
 import net.minecraft.src.EntityItem;
 import net.minecraft.src.EntityPlayer;
 import net.minecraft.src.EntityPlayerMP;
 import net.minecraft.src.IChunkProvider;
 import net.minecraft.src.ICommandListener;
 import net.minecraft.src.IInventory;
+import net.minecraft.src.Item;
 import net.minecraft.src.ItemStack;
+import net.minecraft.src.MLProp;
 import net.minecraft.src.NetworkManager;
 import net.minecraft.src.Packet1Login;
 import net.minecraft.src.Packet250CustomPayload;
 import net.minecraft.src.Packet3Chat;
+import net.minecraft.src.Profiler;
 import net.minecraft.src.ServerRegistry;
+import net.minecraft.src.SidedProxy;
+import net.minecraft.src.StringTranslate;
 import net.minecraft.src.World;
+import net.minecraft.src.WorldType;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.IFMLSidedHandler;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.ModMetadata;
+import cpw.mods.fml.common.ProxyInjector;
+import cpw.mods.fml.common.ReflectionHelper;
+import cpw.mods.fml.common.Side;
+import cpw.mods.fml.common.TickType;
+import cpw.mods.fml.common.modloader.ModLoaderModContainer;
+import cpw.mods.fml.common.modloader.ModProperty;
+import cpw.mods.fml.common.registry.FMLRegistry;
 
 /**
  * Handles primary communication from hooked code into the system
@@ -114,8 +133,9 @@ public class FMLServerHandler implements IFMLSidedHandler
             // We're safe. continue
         }
         server = minecraftServer;
-        FMLCommonHandler.instance().registerSidedDelegate(this);
-        CommonRegistry.registerRegistry(new ServerRegistry());
+        ReflectionHelper.detectObfuscation(World.class);
+        FMLCommonHandler.instance().beginLoading(this);
+        FMLRegistry.registerRegistry(new ServerRegistry());
         Loader.instance().loadMods();
     }
 
@@ -127,22 +147,35 @@ public class FMLServerHandler implements IFMLSidedHandler
         Loader.instance().initializeMods();
     }
 
+    public void onPreServerTick()
+    {
+        FMLCommonHandler.instance().tickStart(EnumSet.of(TickType.GAME));
+    }
+    
+    public void onPostServerTick()
+    {
+        FMLCommonHandler.instance().tickEnd(EnumSet.of(TickType.GAME));
+    }
     /**
      * Every tick just before world and other ticks occur
      */
-    public void onPreTick()
+    public void onPreWorldTick(World world)
     {
-        FMLCommonHandler.instance().gameTickStart();
+        FMLCommonHandler.instance().tickStart(EnumSet.of(TickType.WORLD), world);
     }
 
     /**
      * Every tick just after world and other ticks occur
      */
-    public void onPostTick()
+    public void onPostWorldTick(World world)
     {
-        FMLCommonHandler.instance().gameTickEnd();
+        FMLCommonHandler.instance().tickEnd(EnumSet.of(TickType.WORLD), world);
     }
 
+    public void onWorldLoadTick()
+    {
+        FMLCommonHandler.instance().tickStart(EnumSet.of(TickType.WORLDLOAD));
+    }
     /**
      * Get the server instance
      * 
@@ -175,18 +208,7 @@ public class FMLServerHandler implements IFMLSidedHandler
      */
     public void onChunkPopulate(IChunkProvider chunkProvider, int chunkX, int chunkZ, World world, IChunkProvider generator)
     {
-        Random fmlRandom = new Random(world.func_22079_j());
-        long xSeed = fmlRandom.nextLong() >> 2 + 1L;
-        long zSeed = fmlRandom.nextLong() >> 2 + 1L;
-        fmlRandom.setSeed((xSeed * chunkX + zSeed * chunkZ) ^ world.func_22079_j());
-
-        for (ModContainer mod : Loader.getModList())
-        {
-            if (mod.generatesWorld())
-            {
-                mod.getWorldGenerator().generate(fmlRandom, chunkX, chunkZ, world, generator, chunkProvider);
-            }
-        }
+        FMLCommonHandler.instance().handleWorldGeneration(chunkX, chunkZ, world.func_22079_j(), world, generator, chunkProvider);
     }
 
     /**
@@ -463,24 +485,6 @@ public class FMLServerHandler implements IFMLSidedHandler
         }
     }
 
-    /**
-     * Are we a server?
-     */
-    @Override
-    public boolean isServer()
-    {
-        return true;
-    }
-
-    /**
-     * Are we a client?
-     */
-    @Override
-    public boolean isClient()
-    {
-        return false;
-    }
-
     @Override
     public File getMinecraftRootDirectory()
     {
@@ -536,5 +540,132 @@ public class FMLServerHandler implements IFMLSidedHandler
                 mod.getPlayerTracker().onPlayerChangedDimension(player);
             }
         }
+    }
+
+    /**
+     * @param biome
+     */
+    public void addBiomeToDefaultWorldGenerator(BiomeGenBase biome)
+    {
+        WorldType.field_48457_b.addNewBiome(biome);
+    }
+
+    /**
+     * @param biome
+     */
+    public void removeBiomeFromDefaultWorldGenerator(BiomeGenBase biome)
+    {
+        WorldType.field_48457_b.removeBiome(biome);
+    }
+
+    @Override
+    public Object getMinecraftInstance()
+    {
+        return server;
+    }
+
+    @Override
+    public String getCurrentLanguage()
+    {
+        return StringTranslate.func_25079_a().getCurrentLanguage();
+    }
+
+    @Override
+    public Properties getCurrentLanguageTable()
+    {
+        return StringTranslate.func_25079_a().getCurrentLanguageTable();
+    }
+
+    @Override
+    public String getObjectName(Object instance)
+    {
+        String objectName;
+        if (instance instanceof Item) {
+            objectName=((Item)instance).func_20106_a();
+        } else if (instance instanceof Block) {
+            objectName=((Block)instance).func_20036_e();
+        } else if (instance instanceof ItemStack) {
+            objectName=Item.field_176_c[((ItemStack)instance).field_855_c].func_35407_a((ItemStack)instance);
+        } else {
+            throw new IllegalArgumentException(String.format("Illegal object for naming %s",instance));
+        }
+        objectName+=".name";
+        return objectName;
+    }
+    
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#readMetadataFrom(java.io.InputStream, cpw.mods.fml.common.ModContainer)
+     */
+    @Override
+    public ModMetadata readMetadataFrom(InputStream input, ModContainer mod) throws Exception
+    {
+        return null;
+    }
+
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#profileStart(java.lang.String)
+     */
+    @Override
+    public void profileStart(String profileLabel)
+    {
+        Profiler.func_40518_a(profileLabel);
+    }
+
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#profileEnd()
+     */
+    @Override
+    public void profileEnd()
+    {
+        Profiler.func_40517_a();
+    }
+
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#getModLoaderPropertyFor(java.lang.reflect.Field)
+     */
+    @Override
+    public ModProperty getModLoaderPropertyFor(Field f)
+    {
+        if (f.isAnnotationPresent(MLProp.class))
+        {
+            MLProp prop = f.getAnnotation(MLProp.class);
+            return new ModProperty(prop.info(), prop.min(), prop.max(), prop.name());
+        }
+        return null;
+    }
+
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#getAdditionalBrandingInformation()
+     */
+    @Override
+    public List<String> getAdditionalBrandingInformation()
+    {
+        return null;
+    }
+
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#getSide()
+     */
+    @Override
+    public Side getSide()
+    {
+        return Side.SERVER;
+    }
+
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.IFMLSidedHandler#findSidedProxyOn(cpw.mods.fml.common.modloader.BaseMod)
+     */
+    @Override
+    public ProxyInjector findSidedProxyOn(cpw.mods.fml.common.modloader.BaseMod mod)
+    {
+        for (Field f : mod.getClass().getDeclaredFields())
+        {
+            if (f.isAnnotationPresent(SidedProxy.class))
+            {
+                SidedProxy sp = f.getAnnotation(SidedProxy.class);
+                return new ProxyInjector(sp.clientSide(), sp.serverSide(), sp.bukkitSide(), f);
+            }
+        }
+        return null;
     }
 }

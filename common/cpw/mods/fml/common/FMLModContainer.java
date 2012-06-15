@@ -15,12 +15,14 @@ package cpw.mods.fml.common;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class FMLModContainer implements ModContainer
 {
     private Mod modDescriptor;
     private Object modInstance;
     private File source;
+    private ModMetadata modMetadata;
 
     public FMLModContainer(String dummy)
     {
@@ -92,15 +94,23 @@ public class FMLModContainer implements ModContainer
     }
 
     @Override
-    public void tickStart()
+    public ModState getModState()
     {
         // TODO Auto-generated method stub
+        return null;
     }
-
+    
     @Override
-    public void tickEnd()
+    public void nextState()
     {
         // TODO Auto-generated method stub
+        
+    }
+    @Override
+    public String getSortingRules()
+    {
+        // TODO Auto-generated method stub
+        return null;
     }
 
     @Override
@@ -122,21 +132,7 @@ public class FMLModContainer implements ModContainer
         // TODO Auto-generated method stub
         return null;
     }
-
-    @Override
-    public boolean generatesWorld()
-    {
-        // TODO Auto-generated method stub
-        return false;
-    }
-
-    @Override
-    public IWorldGenerator getWorldGenerator()
-    {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
+    
     @Override
     public int lookupFuelValue(int itemId, int itemDamage)
     {
@@ -305,5 +301,92 @@ public class FMLModContainer implements ModContainer
     {
         // TODO Auto-generated method stub
         return null;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#getKeys()
+     */
+    @Override
+    public List<IKeyHandler> getKeys()
+    {
+        // TODO Auto-generated method stub
+        return null;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#getSourceType()
+     */
+    @Override
+    public SourceType getSourceType()
+    {
+        // TODO Auto-generated method stub
+        return null;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#setSourceType(cpw.mods.fml.common.ModContainer.SourceType)
+     */
+    @Override
+    public void setSourceType(SourceType type)
+    {
+        // TODO Auto-generated method stub
+        
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#getMetadata()
+     */
+    @Override
+    public ModMetadata getMetadata()
+    {
+        return modMetadata;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#setMetadata(cpw.mods.fml.common.ModMetadata)
+     */
+    @Override
+    public void setMetadata(ModMetadata meta)
+    {
+        this.modMetadata=meta;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#gatherRenderers(java.util.Map)
+     */
+    @Override
+    public void gatherRenderers(Map renderers)
+    {
+        // TODO Auto-generated method stub
+        
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#requestAnimations()
+     */
+    @Override
+    public void requestAnimations()
+    {
+        // TODO Auto-generated method stub
+        
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#getVersion()
+     */
+    @Override
+    public String getVersion()
+    {
+        // TODO Auto-generated method stub
+        return null;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#findSidedProxy()
+     */
+    @Override
+    public ProxyInjector findSidedProxy()
+    {
+        // TODO Auto-generated method stub
+        return null;
+    }
+    /* (non-Javadoc)
+     * @see cpw.mods.fml.common.ModContainer#keyBindEvernt(java.lang.Object)
+     */
+    @Override
+    public void keyBindEvent(Object keyBinding)
+    {
+        // TODO Auto-generated method stub        
     }
 }

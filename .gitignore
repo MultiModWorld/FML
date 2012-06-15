@@ -2,5 +2,9 @@
 /minecraft_server
 /mods
 /fmlbuild.properties
+/fmlversion.properties
 /difflist.txt
 /.metadata/
+/eclipse/.metadata/
+/target
+fmlbranding.properties

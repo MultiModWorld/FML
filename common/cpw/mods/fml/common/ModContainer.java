@@ -15,6 +15,9 @@ package cpw.mods.fml.common;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
+
+import cpw.mods.fml.common.ModContainer.SourceType;
 
 /**
  * The container that wraps around mods in the system.
@@ -28,6 +31,21 @@ import java.util.List;
 
 public interface ModContainer
 {
+    public enum ModState {
+        UNLOADED("Unloaded"), LOADED("Loaded"), PREINITIALIZED("Pre-initialized"), INITIALIZED("Initialized"), POSTINITIALIZED("Post-initialized"), AVAILABLE("Available");
+        private String label;
+
+        private ModState(String label) {
+            this.label=label;
+        }
+        public String toString() {
+            return this.label;
+        }
+    }
+    
+    public enum SourceType {
+        JAR, CLASSPATH, DIR;
+    }
     /**
      * The enclosed mod wants to be called during pre-initialization.
      * @return
@@ -56,13 +74,14 @@ public interface ModContainer
      */
     String getName();
     /**
-     * A tick has started
+     * The state of the mod
+     * @return
      */
-    void tickStart();
+    ModState getModState();
     /**
-     * A tick has ended
+     * Move to the next mod state
      */
-    void tickEnd();
+    void nextState();
     /**
      * Does this mod match the supplied mod?
      * @param mod
@@ -75,20 +94,15 @@ public interface ModContainer
      */
     File getSource();
     /**
+     * Returns the sorting rules as a string for printing
+     * @return
+     */
+    String getSortingRules();
+    /**
      * The actual mod object itself
      * @return
      */
     Object getMod();
-    /**
-     * Does this mod want to generate world data.
-     * @return
-     */
-    boolean generatesWorld();
-    /**
-     * The world generator for this mod.
-     * @return
-     */
-    IWorldGenerator getWorldGenerator();
     /**
      * Lookup the fuel value for the supplied item/damage with this mod.
      * @param itemId
@@ -169,4 +183,31 @@ public interface ModContainer
     boolean wantsPlayerTracking();
     
     IPlayerTracker getPlayerTracker();
+    
+    List<IKeyHandler> getKeys();
+    
+    SourceType getSourceType();
+
+    void setSourceType(SourceType type);
+    
+    ModMetadata getMetadata();
+    void setMetadata(ModMetadata meta);
+    /**
+     * 
+     */
+    void gatherRenderers(Map renderers);
+    /**
+     * 
+     */
+    void requestAnimations();
+    /**
+     * @return
+     */
+    String getVersion();
+    /**
+     * @return
+     */
+    ProxyInjector findSidedProxy();
+    
+    void keyBindEvent(Object keyBinding);
 }

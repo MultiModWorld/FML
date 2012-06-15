@@ -14,15 +14,25 @@ package cpw.mods.fml.server;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.logging.Logger;
 
+import org.bukkit.Material;
+
+import net.minecraft.server.Block;
+import net.minecraft.server.Item;
+import net.minecraft.server.LocaleLanguage;
+import net.minecraft.server.MLProp;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.BaseMod;
 import net.minecraft.server.BiomeBase;
-import net.minecraft.server.CommonRegistry;
 import net.minecraft.server.EntityItem;
 import net.minecraft.server.EntityHuman;
 import net.minecraft.server.IChunkProvider;
@@ -34,11 +44,20 @@ import net.minecraft.server.Packet1Login;
 import net.minecraft.server.Packet250CustomPayload;
 import net.minecraft.server.Packet3Chat;
 import net.minecraft.server.BukkitRegistry;
+import net.minecraft.server.SidedProxy;
 import net.minecraft.server.World;
+import net.minecraft.server.WorldType;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.IFMLSidedHandler;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.ModContainer;
+import cpw.mods.fml.common.ModMetadata;
+import cpw.mods.fml.common.ProxyInjector;
+import cpw.mods.fml.common.Side;
+import cpw.mods.fml.common.TickType;
+import cpw.mods.fml.common.modloader.ModLoaderModContainer;
+import cpw.mods.fml.common.modloader.ModProperty;
+import cpw.mods.fml.common.registry.FMLRegistry;
 
 /**
  * Handles primary communication from hooked code into the system
@@ -108,37 +127,48 @@ public class FMLBukkitHandler implements IFMLSidedHandler
             // We're safe. continue
         }
         server = minecraftServer;
-        FMLCommonHandler.instance().registerSidedDelegate(this);
-        CommonRegistry.registerRegistry(new BukkitRegistry());
+        FMLCommonHandler.instance().beginLoading(this);
+        FMLRegistry.registerRegistry(new BukkitRegistry());
         Loader.instance().loadMods();
     }
 
     /**
-     * Called a bit later on during server initialization to finish loading mods
-     */
-    public void onLoadComplete()
-    {
-        Loader.instance().initializeMods();
-    }
+	 * Called a bit later on during server initialization to finish loading mods
+	 */
+	public void onLoadComplete()
+	{
+	    Loader.instance().initializeMods();
+	    for (Item i : Item.byId) {
+	    	if (i!=null && Material.getMaterial(i.id).name().startsWith("X")) {
+	    		Material.setMaterialName(i.id, i.l());
+	    	}
+	    }
+	}
+	
+	public void onWorldLoadTick()
+	{
+		FMLCommonHandler.instance().tickStart(EnumSet.of(TickType.WORLDLOAD));
+	}
 
     /**
      * Every tick just before world and other ticks occur
      */
-    public void onPreTick()
+    public void onPreWorldTick(World world)
     {
-        FMLCommonHandler.instance().gameTickStart();
+        FMLCommonHandler.instance().tickStart(EnumSet.of(TickType.WORLD),world);
     }
 
     /**
      * Every tick just after world and other ticks occur
      */
-    public void onPostTick()
+    public void onPostWorldTick(World world)
     {
-        FMLCommonHandler.instance().gameTickEnd();
+        FMLCommonHandler.instance().tickEnd(EnumSet.of(TickType.WORLD), world);
     }
 
     /**
      * Get the server instance
+     * 
      * @return
      */
     public MinecraftServer getServer()
@@ -168,23 +198,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
      */
     public void onChunkPopulate(IChunkProvider chunkProvider, int chunkX, int chunkZ, World world, IChunkProvider generator)
     {	
-        Random fmlRandom = new Random(world.getSeed());
-        long xSeed = fmlRandom.nextLong() >> 2 + 1L;
-        long zSeed = fmlRandom.nextLong() >> 2 + 1L;
-        fmlRandom.setSeed((xSeed * chunkX + zSeed * chunkZ) ^ world.getSeed());
-
-        for (ModContainer mod : Loader.getModList())
-        {
-            if (mod.generatesWorld())
-            {
-            	//davboecki
-            	if(!de.davboecki.multimodworld.api.ModChecker.populateChunk(world, chunkX, chunkZ, mod, getMinecraftLogger())) {
-            		continue;
-            	}
-            	//davboecki end
-                mod.getWorldGenerator().generate(fmlRandom, chunkX, chunkZ, world, generator, chunkProvider);
-            }
-        }
+    	FMLCommonHandler.instance().handleWorldGeneration(chunkX, chunkZ, world.getSeed(), world, generator, chunkProvider);
     }
 
     /**
@@ -226,6 +240,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Called to notify that an item was picked up from the world
+     * 
      * @param entityItem
      * @param entityPlayer
      */
@@ -242,6 +257,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Raise an exception
+     * 
      * @param exception
      * @param message
      * @param stopGame
@@ -287,6 +303,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Build a list of default overworld biomes
+     * 
      * @return
      */
     public BiomeBase[] getDefaultOverworldBiomes()
@@ -314,6 +331,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Called when an item is crafted
+     * 
      * @param player
      * @param craftedItem
      * @param craftingGrid
@@ -368,6 +386,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Called when a packet 250 packet is received from the player
+     * 
      * @param packet
      * @param player
      */
@@ -389,6 +408,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Handle register requests for packet 250 channels
+     * 
      * @param packet
      */
     private void handleClientRegistration(Packet250CustomPayload packet, EntityHuman player)
@@ -424,6 +444,7 @@ public class FMLBukkitHandler implements IFMLSidedHandler
 
     /**
      * Handle a login
+     * 
      * @param loginPacket
      * @param networkManager
      */
@@ -446,23 +467,6 @@ public class FMLBukkitHandler implements IFMLSidedHandler
                 mod.getPlayerTracker().onPlayerLogin(player);
             }
         }
-    }
-    /**
-     * Are we a server?
-     */
-    @Override
-    public boolean isServer()
-    {
-        return true;
-    }
-
-    /**
-     * Are we a client?
-     */
-    @Override
-    public boolean isClient()
-    {
-        return false;
     }
 
     @Override
@@ -516,4 +520,110 @@ public class FMLBukkitHandler implements IFMLSidedHandler
             }
         }
     }
+
+    /**
+     * @param biome
+     */
+    public void addBiomeToDefaultWorldGenerator(BiomeBase biome)
+    {
+        WorldType.NORMAL.addNewBiome(biome);
+    }
+
+    /**
+     * @param biome
+     */
+    public void removeBiomeFromDefaultWorldGenerator(BiomeBase biome)
+    {
+        WorldType.NORMAL.removeBiome(biome);
+    }
+
+	@Override
+	public Object getMinecraftInstance() {
+		return server;
+	}
+
+	@Override
+    public String getCurrentLanguage()
+    {
+        return LocaleLanguage.a().getCurrentLanguage();
+	}
+
+	@Override
+    public Properties getCurrentLanguageTable()
+    {
+        return LocaleLanguage.a().getCurrentLanguageTable();
+	}
+
+	@Override
+    public String getObjectName(Object instance)
+    {
+        String objectName;
+        if (instance instanceof Item) {
+            objectName=((Item)instance).getName();
+        } else if (instance instanceof Block) {
+            objectName=((Block)instance).getName();
+        } else if (instance instanceof ItemStack) {
+            objectName=Item.byId[((ItemStack)instance).id].a((ItemStack)instance);
+        } else {
+            throw new IllegalArgumentException(String.format("Illegal object for naming %s",instance));
+        }
+        objectName+=".name";
+        return objectName;
+	}
+
+	@Override
+	public ModMetadata readMetadataFrom(InputStream input, ModContainer mod) throws Exception {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void profileStart(String profileLabel) {
+		// NOOP on bukkit
+	}
+
+	@Override
+	public void profileEnd() {
+		// NOOP on bukkit
+	}
+
+	@Override
+	public ModProperty getModLoaderPropertyFor(Field f) {
+		if (f.isAnnotationPresent(MLProp.class)) {
+            MLProp prop = f.getAnnotation(MLProp.class);
+            return new ModProperty(prop.info(), prop.min(), prop.max(), prop.name());
+        }
+        return null;
+	}
+
+	@Override
+	public List<String> getAdditionalBrandingInformation() {
+		return null;
+	}
+
+	@Override
+	public Side getSide() {
+		return Side.BUKKIT;
+	}
+
+	@Override
+	public ProxyInjector findSidedProxyOn(cpw.mods.fml.common.modloader.BaseMod mod) {
+        for (Field f : mod.getClass().getDeclaredFields())
+        {
+            if (f.isAnnotationPresent(SidedProxy.class))
+            {
+                SidedProxy sp = f.getAnnotation(SidedProxy.class);
+                return new ProxyInjector(sp.clientSide(), sp.serverSide(), sp.bukkitSide(), f);
+            }
+        }
+        return null;
+	}
+
+	public void onServerPostTick() {
+		FMLCommonHandler.instance().tickEnd(EnumSet.of(TickType.GAME));
+	}
+
+	public void onServerPreTick() {
+		FMLCommonHandler.instance().tickStart(EnumSet.of(TickType.GAME));
+	}
 }

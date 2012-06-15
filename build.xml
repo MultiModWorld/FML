@@ -23,22 +23,22 @@
       </condition>
     </sequential>
   </macrodef>
+  <target name="writeversion" depends="buildenvsetup">
+    <exec executable="${python.exe}" dir="${basedir}" failonerror="true">
+      <arg value="${basedir}/getversion.py" />
+    </exec>
+    <propertyfile file="fmlversion.properties">
+      <entry key="fmlbuild.build.number" type="int" value="${version.build}"/>
+    </propertyfile>
+  </target>
 
-  <target name="init">
+  <target name="buildenvsetup">
     <tstamp>
       <format pattern="yyMMddHHmmss" property="timestamp" />
     </tstamp>
     <property environment="env" />
     <property file="fmlbuild.properties" />
     <property name="modname" value="fml" />
-    <property name="version.minecraft" value="1.2.5" />
-    <property name="version.major" value="1" />
-    <property name="version.minor" value="0" />
-    <property name="version.rev" value="0" />
-    <condition property="version.build" value="${env.BUILD_NUMBER}" else="1">
-      <isset property="env.BUILD_NUMBER" />
-    </condition>
-    <property name="version" value="${version.major}.${version.minor}.${version.rev}.${version.build}" />
     <condition property="dev.home" value="${env.WORKSPACE}" else="${default.dev.home}">
       <isset property="env.WORKSPACE" />
     </condition>
@@ -58,6 +58,20 @@
     <property name="client.src.dir" location="${basedir}/client" />
     <property name="server.src.dir" location="${basedir}/server" />
     <property name="patch.src.dir" location="${basedir}/patches" />
+    <condition property="version.build" value="${env.BUILD_NUMBER}" else="1">
+      <isset property="env.BUILD_NUMBER" />
+    </condition>
+  </target>
+
+  <target name="init" depends="buildenvsetup">
+    <antcall target="writeversion" />
+    <property file="fmlversion.properties" />
+    <property name="build.number" value="${fmlbuild.major.number}.${fmlbuild.minor.number}.${fmlbuild.revision.number}" />
+    <property name="version.minecraft" value="${fmlbuild.mcversion}" />
+    <property name="version.major" value="${fmlbuild.major.number}" />
+    <property name="version.minor" value="${fmlbuild.minor.number}" />
+    <property name="version.rev" value="${fmlbuild.revision.number}" />
+    <property name="version" value="${version.major}.${version.minor}.${version.rev}.${version.build}" />
   </target>
 
   <target name="clean">
@@ -105,15 +119,6 @@
     <copy todir="${merge-to}" overwrite="true" verbose="true">
       <fileset dir="${side-from}" includes="**/*.java" />
       <fileset dir="${common.src.dir}" includes="**/*.java" />
-      <filterchain>
-        <replacetokens>
-          <token key="MAJOR" value="${version.major}" />
-          <token key="MINOR" value="${version.minor}" />
-          <token key="REV" value="${version.rev}" />
-          <token key="BUILD" value="${version.build}" />
-          <token key="MCVERSION" value="${version.minecraft}" />
-        </replacetokens>
-      </filterchain>
     </copy>
   </target>
 
@@ -135,6 +140,7 @@
     <mkdir dir="${basedir}/target" />
     <zip destfile="${basedir}/target/${jarname}.zip">
       <fileset dir="${output}" includes="**/*.class" />
+      <zipfileset dir="${basedir}" includes="fmlversion.properties"/>
       <zipfileset dir="${basedir}" includes="LICENSE-fml.txt" />
       <zipfileset dir="${basedir}" includes="install/CREDITS-fml.txt" fullpath="CREDITS-fml.txt"/>
       <mappedresources>
@@ -159,24 +165,13 @@
     <property name="jarname" value="${modname}-src-${version}" />
     <zip destfile="${basedir}/target/${jarname}.zip">
       <zipfileset dir="${basedir}" includes="LICENSE-fml.txt,difflist.txt" prefix="fml" />
-      <zipfileset dir="${common.src.dir}" includes="**/*.java" excludes="**/Loader.java" prefix="fml/src/minecraft_server" />
+      <zipfileset dir="${common.src.dir}" includes="**/*.java" prefix="fml/src/minecraft_server" />
+      <zipfileset dir="${common.src.dir}" includes="**/*.java" prefix="fml/src/minecraft" />
+      <zipfileset dir="${client.src.dir}" includes="**/*.java" prefix="fml/src/minecraft" />
       <zipfileset dir="${server.src.dir}" includes="**/*.java" prefix="fml/src/minecraft_server" />
+      <zipfileset dir="${basedir}" includes="fmlversion.properties" prefix="fml/src/minecraft" />
+      <zipfileset dir="${basedir}" includes="fmlversion.properties" prefix="fml/src/minecraft_server" />
       <zipfileset dir="${patch.src.dir}" includes="**/*.patch" prefix="fml/patches" />
-      <mappedresources>
-        <concat>
-          <fileset dir="${common.src.dir}" includes="cpw/mods/fml/common/Loader.java" />
-          <filterchain>
-            <replacetokens>
-              <token key="MAJOR" value="${version.major}" />
-              <token key="MINOR" value="${version.minor}" />
-              <token key="REV" value="${version.rev}" />
-              <token key="BUILD" value="${version.build}" />
-              <token key="MCVERSION" value="${version.minecraft}" />
-            </replacetokens>
-          </filterchain>
-        </concat>
-        <mergemapper to="fml/src/minecraft_server/cpw/mods/fml/common/Loader.java" />
-      </mappedresources>
       <mappedresources>
         <concat>
           <fileset dir="${basedir}/install" includes="README.txt" />
@@ -196,7 +191,7 @@
     </zip>
   </target>
 
-  <target name="build" depends="init,clean,merge-server,patch,build-server,build-source-pack" />
+  <target name="build" depends="init,clean,merge-server,merge-client,patch,build-server,build-client,build-source-pack" />
 
   <target name="patch" depends="init">
     <exec executable="${python.exe}" dir="${basedir}">
