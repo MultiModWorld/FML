@@ -65,7 +65,7 @@ public class ModLoaderModContainer implements ModContainer
     private ModMetadata metadata;
     private ProxyInjector sidedProxy;
     private BaseModTicker tickHandler;
-    
+
     public ModLoaderModContainer(Class <? extends BaseMod > modClazz, File modSource)
     {
         this.modClazz = modClazz;
@@ -83,7 +83,7 @@ public class ModLoaderModContainer implements ModContainer
         this.mod=instance;
         this.tickHandler = new BaseModTicker(instance);
     }
-    
+
     @Override
     public boolean wantsPreInit()
     {
@@ -143,6 +143,9 @@ public class ModLoaderModContainer implements ModContainer
         File modConfig = new File(configDir, String.format("%s.cfg", modConfigName));
         Properties props = new Properties();
 
+        boolean existingConfigFound = false;
+        boolean mlPropFound = false;
+
         if (modConfig.exists())
         {
             try
@@ -158,6 +161,7 @@ public class ModLoaderModContainer implements ModContainer
                 Loader.log.throwing("ModLoaderModContainer", "configureMod", e);
                 throw new LoaderException(e);
             }
+            existingConfigFound = true;
         }
 
         StringBuffer comments = new StringBuffer();
@@ -227,10 +231,33 @@ public class ModLoaderModContainer implements ModContainer
                     }
                     comments.append("\n");
                 }
+                mlPropFound = true;
             }
         }
         finally
         {
+            if (!mlPropFound && !existingConfigFound)
+            {
+                Loader.log.fine(String.format("No MLProp configuration for %s found or required. No file written", modConfigName));
+                return;
+            }
+
+            if (!mlPropFound && existingConfigFound)
+            {
+                File mlPropBackup = new File(modConfig.getParent(),modConfig.getName()+".bak");
+                Loader.log.fine(String.format("MLProp configuration file for %s found but not required. Attempting to rename file to %s", modConfigName, mlPropBackup.getName()));
+                boolean renamed = modConfig.renameTo(mlPropBackup);
+                if (renamed)
+                {
+                    Loader.log.fine(String.format("Unused MLProp configuration file for %s renamed successfully to %s", modConfigName, mlPropBackup.getName()));
+                }
+                else
+                {
+                    Loader.log.fine(String.format("Unused MLProp configuration file for %s renamed UNSUCCESSFULLY to %s", modConfigName, mlPropBackup.getName()));
+                }
+
+                return;
+            }
             try
             {
                 FileWriter configWriter = new FileWriter(modConfig);
@@ -336,19 +363,21 @@ public class ModLoaderModContainer implements ModContainer
         return mod != null ? mod.getName() : modClazz.getSimpleName();
     }
 
+    @Deprecated
     public static ModContainer findContainerFor(BaseMod mod)
     {
-        for (ModContainer mc : Loader.getModList())
-        {
-            if (mc.matches(mod))
-            {
-                return mc;
-            }
-        }
-
-        return null;
+        return FMLCommonHandler.instance().findContainerFor(mod);
     }
 
+    @Override
+    public String getSortingRules()
+    {
+        if (mod!=null) {
+            return mod.getPriorities();
+        } else {
+            return "";
+        }
+    }
     @Override
     public String getSortingRules()
     {
@@ -365,7 +394,8 @@ public class ModLoaderModContainer implements ModContainer
     }
 
     /**
-     * Find all the BaseMods in the system 
+     * Find all the BaseMods in the system
+     * @param <A>
      * @param <A>
      * @return
      */
@@ -460,6 +490,7 @@ public class ModLoaderModContainer implements ModContainer
             if (depparts.length < 2)
             {
                 parseFailure=true;
+                continue;
             }
             else if ("required-before".equals(depparts[0]) || "required-after".equals(depparts[0]))
             {
@@ -467,6 +498,7 @@ public class ModLoaderModContainer implements ModContainer
                     dependencies.add(depparts[1]);
                 } else {
                     parseFailure=true;
+                    continue;
                 }
             }
             else if ("required-before".equals(depparts[0]) || "before".equals(depparts[0]))
@@ -478,6 +510,10 @@ public class ModLoaderModContainer implements ModContainer
             } else {
                 parseFailure=true;
             }
+        }
+
+        if (parseFailure) {
+            FMLCommonHandler.instance().getFMLLogger().warning(String.format("The mod %s has an incorrect dependency string {%s}", mod.getName(), mod.getPriorities()));
         }
         
         if (parseFailure) {
@@ -574,7 +610,7 @@ public class ModLoaderModContainer implements ModContainer
         if (keyHandlers==null) {
             keyHandlers=new ArrayList<IKeyHandler>();
         }
-        
+
         Iterator<IKeyHandler> itr = keyHandlers.iterator();
         while(itr.hasNext())
         {
@@ -584,7 +620,7 @@ public class ModLoaderModContainer implements ModContainer
                 itr.remove();
             }
         }
-        
+
         keyHandlers.add(handler);
     }
 

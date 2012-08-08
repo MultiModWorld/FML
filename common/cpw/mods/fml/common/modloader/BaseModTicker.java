@@ -29,12 +29,13 @@ public class BaseModTicker implements ITickHandler
 
     private BaseMod mod;
     private EnumSet<TickType> ticks;
+    private boolean clockTickTrigger;
     
     
     BaseModTicker(BaseMod mod)
     {
         this.mod = mod;
-        this.ticks = EnumSet.noneOf(TickType.class);
+        this.ticks = EnumSet.of(TickType.WORLDLOAD);
     }
     
     BaseModTicker(EnumSet<TickType> ticks)
@@ -51,10 +52,39 @@ public class BaseModTicker implements ITickHandler
     @Override
     public void tickEnd(EnumSet<TickType> types, Object... tickData)
     {
-        tickBaseMod(ticks, true, tickData);
+        tickBaseMod(types, true, tickData);
     }
 
     private void tickBaseMod(EnumSet<TickType> types, boolean end, Object... tickData)
+    {
+        if (FMLCommonHandler.instance().getSide().isClient() && ( ticks.contains(TickType.GAME) || ticks.contains(TickType.WORLDGUI)))
+        {
+            EnumSet cTypes=EnumSet.copyOf(types);
+            if (end && ( types.contains(TickType.GAME) || types.contains(TickType.WORLDLOAD) || types.contains(TickType.WORLDGUI)))
+            {
+                clockTickTrigger =  true;
+                cTypes.remove(TickType.GAME);
+                cTypes.remove(TickType.WORLDLOAD);
+                cTypes.remove(TickType.WORLDGUI);
+            }
+            
+            if (end && clockTickTrigger && types.contains(TickType.RENDER))
+            {
+                clockTickTrigger = false;
+                cTypes.remove(TickType.RENDER);
+                if (ticks.contains(TickType.GAME)) cTypes.add(TickType.GAME);
+                if (ticks.contains(TickType.WORLDGUI)) cTypes.add(TickType.WORLDGUI);
+            }
+            
+            sendTick(cTypes, end, tickData);
+        }
+        else
+        {
+            sendTick(types, end, tickData);
+        }
+    }
+        
+    private void sendTick(EnumSet<TickType> types, boolean end, Object... tickData)
     {
         for (TickType type : types)
         {
@@ -73,7 +103,7 @@ public class BaseModTicker implements ITickHandler
     @Override
     public EnumSet<TickType> ticks()
     {
-        return ticks;
+        return (clockTickTrigger ? EnumSet.of(TickType.RENDER) : ticks);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package net.minecraft.src;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import cpw.mods.fml.common.registry.IMinecraftRegistry;
@@ -19,6 +20,12 @@ public class ServerRegistry implements IMinecraftRegistry
     public void addShapelessRecipe(ItemStack output, Object... params)
     {
         CraftingManager.func_20151_a().func_21146_b(output, params);
+    }
+
+    @Override
+    public void addRecipe(IRecipe recipe)
+    {
+        CraftingManager.func_20151_a().func_25126_b().add(recipe);
     }
 
     @Override
@@ -80,7 +87,7 @@ public class ServerRegistry implements IMinecraftRegistry
         {
             @SuppressWarnings("unchecked")
             List<SpawnListEntry> spawns = biome.func_25055_a(typeOfCreature);
-    
+
             for (SpawnListEntry entry : spawns)
             {
                 //Adjusting an existing spawn entry
@@ -92,7 +99,7 @@ public class ServerRegistry implements IMinecraftRegistry
                     break;
                 }
             }
-    
+
             spawns.add(new SpawnListEntry(entityClass, weightedProb, min, max));
         }
     }
@@ -102,7 +109,7 @@ public class ServerRegistry implements IMinecraftRegistry
     public void addSpawn(String entityName, int weightedProb, int min, int max, EnumCreatureType spawnList, BiomeGenBase... biomes)
     {
         Class <? extends Entity > entityClazz = EntityList.getEntityToClassMapping().get(entityName);
-    
+
         if (EntityLiving.class.isAssignableFrom(entityClazz))
         {
             addSpawn((Class <? extends EntityLiving >) entityClazz, weightedProb, min, max, spawnList, biomes);
@@ -121,13 +128,14 @@ public class ServerRegistry implements IMinecraftRegistry
         for (BiomeGenBase biome : biomes)
         {
             @SuppressWarnings("unchecked")
-            List<SpawnListEntry> spawns = biome.func_25055_a(typeOfCreature);
-    
-            for (SpawnListEntry entry : Collections.unmodifiableList(spawns))
+            Iterator<SpawnListEntry> spawns = biome.func_25055_a(typeOfCreature).iterator();
+
+            while (spawns.hasNext())
             {
+                SpawnListEntry entry = spawns.next();
                 if (entry.field_25145_a == entityClass)
                 {
-                    spawns.remove(entry);
+                    spawns.remove();
                 }
             }
         }
@@ -138,7 +146,7 @@ public class ServerRegistry implements IMinecraftRegistry
     public void removeSpawn(String entityName, EnumCreatureType spawnList, BiomeGenBase... biomes)
     {
         Class <? extends Entity > entityClazz = EntityList.getEntityToClassMapping().get(entityName);
-    
+
         if (EntityLiving.class.isAssignableFrom(entityClazz))
         {
             removeSpawn((Class <? extends EntityLiving >) entityClazz, spawnList, biomes);

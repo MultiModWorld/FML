@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
@@ -37,20 +38,19 @@ import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
-import net.minecraft.server.World;
-
 import cpw.mods.fml.common.ModContainer.SourceType;
+import net.minecraft.server.World;
 
 /**
  * The main class for non-obfuscated hook handling code
- * 
- * Anything that doesn't require obfuscated or client/server specific code should 
+ *
+ * Anything that doesn't require obfuscated or client/server specific code should
  * go in this handler
- * 
+ *
  * It also contains a reference to the sided handler instance that is valid
  * allowing for common code to access specific properties from the obfuscated world
  * without a direct dependency
- * 
+ *
  * @author cpw
  *
  */
@@ -74,23 +74,56 @@ public class FMLCommonHandler
      */
     private Map<Object, Set<String>> activeChannels = new HashMap<Object, Set<String>>();
     /**
-     * The delegate for side specific data and functions 
+     * The delegate for side specific data and functions
      */
     private IFMLSidedHandler sidedDelegate;
     
     private int uniqueEntityListId = 220;
 
+    private int uniqueEntityListId = 220;
+
     private List<ModContainer> auxilliaryContainers = new ArrayList<ModContainer>();
 
     private Map<String,Properties> modLanguageData=new HashMap<String,Properties>();
-    
-    private Set<ITickHandler> tickHandlers = new HashSet<ITickHandler>();
-    
+
+    private PriorityQueue<TickQueueElement> tickHandlers = new PriorityQueue<TickQueueElement>();
+
+    private List<IScheduledTickHandler> scheduledTicks = new ArrayList<IScheduledTickHandler>();
+
     private Set<IWorldGenerator> worldGenerators = new HashSet<IWorldGenerator>();
     /**
      * We register our delegate here
      * @param handler
      */
+
+    private static class TickQueueElement implements Comparable<TickQueueElement>
+    {
+        static long tickCounter = 0;
+        public TickQueueElement(IScheduledTickHandler ticker)
+        {
+            this.ticker = ticker;
+            update();
+        }
+        @Override
+        public int compareTo(TickQueueElement o)
+        {
+            return (int)(next - o.next);
+        }
+
+        public void update()
+        {
+            next = tickCounter + Math.max(ticker.nextTickSpacing(),1);
+        }
+
+        private long next;
+        private IScheduledTickHandler ticker;
+
+        public boolean scheduledNow()
+        {
+            return tickCounter >= next;
+        }
+    }
+
     public void beginLoading(IFMLSidedHandler handler)
     {
         sidedDelegate = handler;
@@ -99,10 +132,32 @@ public class FMLCommonHandler
         getFMLLogger().info("Completed early MinecraftForge initialization");
     }
 
+    public void rescheduleTicks()
+    {
+        sidedDelegate.profileStart("modTickScheduling");
+        TickQueueElement.tickCounter++;
+        scheduledTicks.clear();
+        while (true)
+        {
+            if (tickHandlers.size()==0 || !tickHandlers.peek().scheduledNow())
+            {
+                break;
+            }
+            TickQueueElement tickQueueElement  = tickHandlers.poll();
+            tickQueueElement.update();
+            tickHandlers.offer(tickQueueElement);
+            scheduledTicks.add(tickQueueElement.ticker);
+        }
+        sidedDelegate.profileEnd();
+    }
     public void tickStart(EnumSet<TickType> ticks, Object ... data)
     {
+        if (scheduledTicks.size()==0)
+        {
+            return;
+        }
         sidedDelegate.profileStart("modTickStart$"+ticks);
-        for (ITickHandler ticker : tickHandlers)
+        for (IScheduledTickHandler ticker : scheduledTicks)
         {
             EnumSet<TickType> ticksToRun = EnumSet.copyOf(ticker.ticks());
             ticksToRun.removeAll(EnumSet.complementOf(ticks));
@@ -115,11 +170,15 @@ public class FMLCommonHandler
         }
         sidedDelegate.profileEnd();
     }
-    
+
     public void tickEnd(EnumSet<TickType> ticks, Object ... data)
     {
+        if (scheduledTicks.size()==0)
+        {
+            return;
+        }
         sidedDelegate.profileStart("modTickEnd$"+ticks);
-        for (ITickHandler ticker : tickHandlers)
+        for (IScheduledTickHandler ticker : scheduledTicks)
         {
             EnumSet<TickType> ticksToRun = EnumSet.copyOf(ticker.ticks());
             ticksToRun.removeAll(EnumSet.complementOf(ticks));
@@ -132,7 +191,7 @@ public class FMLCommonHandler
         }
         sidedDelegate.profileEnd();
     }
-    
+
     public List<IKeyHandler> gatherKeyBindings() {
         List<IKeyHandler> allKeys=new ArrayList<IKeyHandler>();
         for (ModContainer mod : Loader.getModList())
@@ -152,7 +211,22 @@ public class FMLCommonHandler
     {
         return INSTANCE;
     }
-
+    /**
+     * Find the container that associates with the supplied mod object
+     * @param mod
+     * @return
+     */
+    public ModContainer findContainerFor(Object mod)
+    {
+        for (ModContainer mc : Loader.getModList())
+        {
+            if (mc.matches(mod))
+            {
+                return mc;
+            }
+        }
+        return null;
+    }
     /**
      * Lookup the mod for a channel
      * @param channel
@@ -282,6 +356,11 @@ public class FMLCommonHandler
      */
     public Logger getMinecraftLogger()
     {
+        if (sidedDelegate == null)
+        {
+            throw new RuntimeException("sidedDelegate null when attempting to getMinecraftLogger, this is generally caused by you not installing FML properly, " +
+            "or installing some other mod that edits Minecraft.class on top of FML such as ModLoader, do not do this. Reinstall FML properly and try again.");
+        }
         return sidedDelegate.getMinecraftLogger();
     }
 
@@ -305,7 +384,7 @@ public class FMLCommonHandler
     {
         return sidedDelegate.loadBaseModMod(clazz, canonicalFile);
     }
-    
+
     public File getMinecraftRootDirectory() {
         return sidedDelegate.getMinecraftRootDirectory();
     }
@@ -339,7 +418,7 @@ public class FMLCommonHandler
             modLanguageData.put(lang, langPack);
         }
         langPack.put(key,value);
-        
+
         handleLanguageLoad(sidedDelegate.getCurrentLanguageTable(), lang);
     }
 
@@ -364,7 +443,7 @@ public class FMLCommonHandler
     {
         return sidedDelegate.getSide();
     }
-    
+
     public void addAuxilliaryModContainer(ModContainer ticker)
     {
         auxilliaryContainers.add(ticker);
@@ -372,7 +451,7 @@ public class FMLCommonHandler
 
     /**
      * Called from the furnace to lookup fuel values
-     * 
+     *
      * @param itemId
      * @param itemDamage
      * @return
@@ -380,24 +459,24 @@ public class FMLCommonHandler
     public int fuelLookup(int itemId, int itemDamage)
     {
         int fv = 0;
-    
+
         for (ModContainer mod : Loader.getModList())
         {
             fv = Math.max(fv, mod.lookupFuelValue(itemId, itemDamage));
         }
-    
+
         return fv;
     }
-    
+
     public void addNameForObject(Object minecraftObject, String lang, String name) {
         String label=sidedDelegate.getObjectName(minecraftObject);
         addStringLocalization(label, lang, name);
     }
-    
-    
+
+
     /**
      * Raise an exception
-     * 
+     *
      * @param exception
      * @param message
      * @param stopGame
@@ -408,10 +487,10 @@ public class FMLCommonHandler
         throw new RuntimeException(exception);
     }
 
-    
+
     private Class<?> forge;
     private boolean noForge;
-    
+
     private Class<?> findMinecraftForge()
     {
         if (forge==null && !noForge)
@@ -429,7 +508,7 @@ public class FMLCommonHandler
         }
         return forge;
     }
-    
+
     private Object callForgeMethod(String method)
     {
         if (noForge)
@@ -477,9 +556,10 @@ public class FMLCommonHandler
     public void loadMetadataFor(ModContainer mod)
     {
         if (mod.getSourceType()==SourceType.JAR) {
+            ZipFile jar = null;
             try
             {
-                ZipFile jar = new ZipFile(mod.getSource());
+                jar = new ZipFile(mod.getSource());
                 ZipEntry infoFile=jar.getEntry("mcmod.info");
                 if (infoFile!=null) {
                     InputStream input=jar.getInputStream(infoFile);
@@ -494,6 +574,20 @@ public class FMLCommonHandler
                 // Something wrong but we don't care
                 getFMLLogger().fine(String.format("Failed to find mcmod.info file in %s for %s", mod.getSource().getName(), mod.getName()));
                 getFMLLogger().throwing("FMLCommonHandler", "loadMetadataFor", e);
+            }
+            finally
+            {
+                if (jar!=null)
+                {
+                    try
+                    {
+                        jar.close();
+                    }
+                    catch (IOException e)
+                    {
+                        // GO AWAY
+                    }
+                }
             }
         } else {
             try
@@ -544,27 +638,32 @@ public class FMLCommonHandler
         fmlRandom.setSeed((xSeed * chunkX + zSeed * chunkZ) ^ worldSeed);
 
         for (IWorldGenerator generator : worldGenerators)
-		{
-			//davboecki
+        {
+        	//davboecki
         	ModContainer mod = null;
         	if(generator instanceof ModContainer) {
         		mod = (ModContainer)generator;
         	}
         	if(mod != null) {
-				if(!de.davboecki.multimodworld.api.ModChecker.populateChunk((World) data[0], chunkX, chunkZ, mod, getMinecraftLogger())) {
-					continue;
-				}
+        		if(!de.davboecki.multimodworld.api.ModChecker.populateChunk((World) data[0], chunkX, chunkZ, mod, getMinecraftLogger())) {
+        			continue;
+        		}
         	}
-			//davboecki end
+        	//davboecki end
             generator.generate(fmlRandom, chunkX, chunkZ, data);
         }
     }
-    
+
     public void registerTickHandler(ITickHandler handler)
     {
-        tickHandlers.add(handler);
+        registerScheduledTickHandler(new SingleIntervalHandler(handler));
     }
-    
+
+    public void registerScheduledTickHandler(IScheduledTickHandler handler)
+    {
+        tickHandlers.add(new TickQueueElement(handler));
+    }
+
     public void registerWorldGenerator(IWorldGenerator generator)
     {
         worldGenerators.add(generator);

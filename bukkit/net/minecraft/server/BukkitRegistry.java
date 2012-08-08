@@ -1,6 +1,6 @@
 package net.minecraft.server;
 
-import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import net.minecraft.src.BiomeGenBase;
@@ -21,6 +21,13 @@ public class BukkitRegistry implements IMinecraftRegistry
     public void addShapelessRecipe(net.minecraft.src.ItemStack output, Object... params)
     {
         CraftingManager.getInstance().registerShapelessRecipe((ItemStack) output, params);
+    }
+
+    @SuppressWarnings("unchecked")
+	@Override
+    public void addRecipe(net.minecraft.src.IRecipe recipe)
+    {
+        CraftingManager.getInstance().getRecipies().add(recipe);
     }
 
     @Override
@@ -51,19 +58,22 @@ public class BukkitRegistry implements IMinecraftRegistry
         }
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     public void registerEntityID(Class <? extends net.minecraft.src.Entity > entityClass, String entityName, int id)
     {
         EntityTypes.addNewEntityListMapping((Class<? extends Entity>) entityClass, entityName, id);
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     public void registerEntityID(Class <? extends net.minecraft.src.Entity > entityClass, String entityName, int id, int backgroundEggColour, int foregroundEggColour)
     {
         EntityTypes.addNewEntityListMapping((Class<? extends Entity>) entityClass, entityName, id, backgroundEggColour, foregroundEggColour);
     }
 
-    @Override
+    @SuppressWarnings("unchecked")
+	@Override
     public void registerTileEntity(Class <? extends net.minecraft.src.TileEntity > tileEntityClass, String id)
     {
         TileEntity.addNewTileEntityMapping((Class<? extends TileEntity>) tileEntityClass, id);
@@ -83,7 +93,7 @@ public class BukkitRegistry implements IMinecraftRegistry
         {
             @SuppressWarnings("unchecked")
             List<BiomeMeta> spawns = ((BiomeBase)biome).getMobs((EnumCreatureType)typeOfCreature);
-    
+
             for (BiomeMeta entry : spawns)
             {
                 //Adjusting an existing spawn entry
@@ -95,7 +105,7 @@ public class BukkitRegistry implements IMinecraftRegistry
                     break;
                 }
             }
-    
+
             spawns.add(new BiomeMeta(entityClass, weightedProb, min, max));
         }
     }
@@ -105,7 +115,7 @@ public class BukkitRegistry implements IMinecraftRegistry
     public void addSpawn(String entityName, int weightedProb, int min, int max, net.minecraft.src.EnumCreatureType spawnList, BiomeGenBase... biomes)
     {
         Class <? extends Entity > entityClazz = EntityTypes.getEntityToClassMapping().get(entityName);
-    
+
         if (EntityLiving.class.isAssignableFrom(entityClazz))
         {
             addSpawn((Class <? extends net.minecraft.src.EntityLiving >) entityClazz, weightedProb, min, max, spawnList, biomes);
@@ -126,12 +136,14 @@ public class BukkitRegistry implements IMinecraftRegistry
         {
             @SuppressWarnings("unchecked")
             List<BiomeMeta> spawns = ((BiomeBase)biome).getMobs((EnumCreatureType) typeOfCreature);
-    
-            for (BiomeMeta entry : Collections.unmodifiableList(spawns))
+
+            Iterator<BiomeMeta> entries = spawns.iterator();
+            while (entries.hasNext())
             {
+            	BiomeMeta entry = entries.next();
                 if (entry.a == entityClass)
                 {
-                    spawns.remove(entry);
+                    entries.remove();
                 }
             }
         }
@@ -142,7 +154,7 @@ public class BukkitRegistry implements IMinecraftRegistry
     public void removeSpawn(String entityName, net.minecraft.src.EnumCreatureType spawnList, BiomeGenBase... biomes)
     {
         Class <? extends Entity > entityClazz = EntityTypes.getEntityToClassMapping().get(entityName);
-    
+
         if (EntityLiving.class.isAssignableFrom(entityClazz))
         {
             removeSpawn((Class <? extends net.minecraft.src.EntityLiving >) entityClazz, spawnList, biomes);

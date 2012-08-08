@@ -34,21 +34,17 @@ public class ModLoaderHelper
         ModLoaderModContainer mlmc = findOrBuildModContainer(mod);
         BaseModTicker ticker = mlmc.getTickHandler();
         EnumSet<TickType> ticks = ticker.ticks();
-        // If we're enabled and we don't want clock ticks we get render ticks
-        if (enable && !useClock && FMLCommonHandler.instance().getSide().isClient()) {
+        // If we're enabled we get render ticks
+        if (enable && !useClock) {
             ticks.add(TickType.RENDER);
         } else {
             ticks.remove(TickType.RENDER);
         }
-        // If we're enabled but we want clock ticks, or we're server side we get game ticks 
+        // If we're enabled but we want clock ticks, or we're server side we get game ticks
         if (enable && (useClock || FMLCommonHandler.instance().getSide().isServer())) {
             ticks.add(TickType.GAME);
         } else {
             ticks.remove(TickType.GAME);
-        }
-        
-        if (enable) {
-            ticks.add(TickType.WORLDLOAD);
         }
     }
 
@@ -57,19 +53,16 @@ public class ModLoaderHelper
         ModLoaderModContainer mlmc = findOrBuildModContainer(mod);
         EnumSet<TickType> ticks = mlmc.getTickHandler().ticks();
         // If we're enabled and we don't want clock ticks we get render ticks
-        if (enable && !useClock && FMLCommonHandler.instance().getSide().isClient()) {
+        if (enable && !useClock) {
             ticks.add(TickType.GUI);
         } else {
             ticks.remove(TickType.GUI);
         }
-        // If we're enabled but we want clock ticks, or we're server side we get world ticks 
+        // If we're enabled but we want clock ticks, or we're server side we get world ticks
         if (enable && (useClock || FMLCommonHandler.instance().getSide().isServer())) {
             ticks.add(TickType.WORLDGUI);
         } else {
             ticks.remove(TickType.WORLDGUI);
-        }
-        if (enable) {
-            ticks.add(TickType.GUILOAD);
         }
     }
 
@@ -79,7 +72,7 @@ public class ModLoaderHelper
      */
     private static ModLoaderModContainer findOrBuildModContainer(BaseMod mod)
     {
-        ModLoaderModContainer mlmc=(ModLoaderModContainer) ModLoaderModContainer.findContainerFor(mod);
+        ModLoaderModContainer mlmc=(ModLoaderModContainer) FMLCommonHandler.instance().findContainerFor(mod);
         if (mlmc==null) {
             mlmc=notModCallbacks.get(mod);
             if (mlmc==null) {
@@ -89,7 +82,7 @@ public class ModLoaderHelper
         }
         return mlmc;
     }
-    
+
     public static ModLoaderModContainer registerRenderHelper(BaseMod mod) {
         ModLoaderModContainer mlmc=findOrBuildModContainer(mod);
         return mlmc;
