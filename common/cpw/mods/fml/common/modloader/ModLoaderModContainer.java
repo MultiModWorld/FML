@@ -379,15 +379,6 @@ public class ModLoaderModContainer implements ModContainer
         }
     }
     @Override
-    public String getSortingRules()
-    {
-        if (mod!=null) {
-            return mod.getPriorities();
-        } else {
-            return "";
-        }
-    }
-    @Override
     public boolean matches(Object mod)
     {
         return modClazz.isInstance(mod);

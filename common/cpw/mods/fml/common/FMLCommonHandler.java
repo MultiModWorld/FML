@@ -80,8 +80,6 @@ public class FMLCommonHandler
     
     private int uniqueEntityListId = 220;
 
-    private int uniqueEntityListId = 220;
-
     private List<ModContainer> auxilliaryContainers = new ArrayList<ModContainer>();
 
     private Map<String,Properties> modLanguageData=new HashMap<String,Properties>();
